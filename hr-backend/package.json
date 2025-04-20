@@ -1,0 +1,21 @@
+{
+  "name": "hr-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "瑞佳恒创科技有限公司 <contact@ruijia.tech>",
+  "license": "MIT",
+  "description": "人力资源智能分析系统后端服务，基于 FastAPI 与机器学习模型",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  },
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ruijia-tech/hr-backend.git"
+  }
+}

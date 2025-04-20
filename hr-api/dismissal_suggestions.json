@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1b831963-54be-4bc5-89f0-958c7028a08c",
+    "employee_id": null,
+    "employee_name": null,
+    "original_suggestion": "",
+    "modified_suggestion": ",400,000 元（按12个月工资计算，假设月薪200,000元）",
+    "from": "admin",
+    "to": "hr",
+    "status": "已处理",
+    "timestamp": "2025-04-18 19:59:14"
+  },
+  {
+    "id": "81ec5f0c-58ff-45a5-9d51-4866ed830c24",
+    "employee_id": null,
+    "employee_name": null,
+    "original_suggestion": "",
+    "modified_suggestion": "122",
+    "from": "admin",
+    "to": "hr",
+    "status": "已处理",
+    "timestamp": "2025-04-18 20:01:32"
+  }
+]

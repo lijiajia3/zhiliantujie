@@ -1,7 +1,33 @@
+# Python
 __pycache__/
 *.pyc
-.env
-*.sqlite3
-uploads/
+*.pyo
+*.pyd
 *.pkl
+.env
+env/
+venv/
 
+# SQLite / DB
+*.sqlite3
+*.db
+*.bak
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+build/
+dist/
+client/build/
+
+# MacOS 系統檔案
+.DS_Store
+
+# VSCode 設定
+.vscode/
+
+# 日誌和上傳資料
+*.log
+uploads/

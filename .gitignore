@@ -1,3 +1,13 @@
+*.pyc
+__pycache__/
+venv/
+*.log
+uploads/
+*.pkl
+.env
+*.db
+node_modules/
+dist/
 # Python
 __pycache__/
 *.pyc

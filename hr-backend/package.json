@@ -11,7 +11,8 @@
   "description": "人力资源智能分析系统后端服务，基于 FastAPI 与机器学习模型",
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "mongoose": "^8.13.2"
   },
   "private": false,
   "repository": {

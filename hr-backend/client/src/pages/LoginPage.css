@@ -1,0 +1,115 @@
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #f9f9f9;
+    flex-direction: column;
+    position: relative;
+}
+
+.login-box {
+    background: #fff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    width: 400px;
+    transform: translateX(-20px);
+}
+
+.header-container {
+    position: absolute;
+    top: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.title {
+    font-size: 36px;
+    font-weight: bold;
+    letter-spacing: normal;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.subtitle {
+    font-size: 14px;
+    background: #000;
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 12px;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+.tab-switch {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.tab {
+    margin: 0 10px;
+    cursor: pointer;
+    font-size: 16px;
+    padding-bottom: 4px;
+}
+
+.tab.active {
+    border-bottom: 2px solid black;
+    font-weight: bold;
+}
+
+.region-notice {
+    margin-bottom: 16px;
+    color: #555;
+    font-size: 14px;
+}
+
+.input-group {
+    margin-bottom: 16px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+.agreement {
+    font-size: 13px;
+    margin-bottom: 20px;
+    color: #555;
+    text-align: center;
+    word-break: break-word;
+    line-height: 1.6;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 14px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.bottom-links {
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+.footer {
+    margin-top: 30px;
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cab77fce-17bf-4f76-99ba-92308e1ff4c3",
+    "resume_id": "001",
+    "recommend_reason": "",
+    "status": "已录用",
+    "timestamp": "2025-04-17 11:32:15"
+  },
+  {
+    "id": "78c46e2e-3b87-4010-85bd-65cb633e5a68",
+    "resume_id": "007",
+    "recommend_reason": "",
+    "status": "已录用",
+    "timestamp": "2025-04-17 12:14:27"
+  },
+  {
+    "id": "e7614e1a-aa3e-474d-8413-fa743f11ec3b",
+    "resume_id": "011",
+    "recommend_reason": "",
+    "status": "已录用",
+    "timestamp": "2025-04-17 17:12:27"
+  },
+  {
+    "id": "3ee92ec3-c895-43de-ae1f-c08b97e22151",
+    "resume_id": "088",
+    "recommend_reason": "",
+    "status": "不通过",
+    "timestamp": "2025-04-17 17:46:36"
+  },
+  {
+    "id": "d543791d-5478-41b2-9480-efd64d90d533",
+    "resume_id": "031",
+    "recommend_reason": "",
+    "status": "已录用",
+    "timestamp": "2025-04-18 16:21:29"
+  },
+  {
+    "id": "4f802e5c-17b7-4c33-88df-f62402aa9b6b",
+    "resume_id": "077",
+    "recommend_reason": "",
+    "status": "已录用",
+    "timestamp": "2025-04-18 16:43:00"
+  },
+  {
+    "id": "90a677bc-33c6-4b16-8b5e-aaa703313c77",
+    "resume_id": "202504-01",
+    "recommend_reason": "",
+    "status": "不通过",
+    "timestamp": "2025-04-18 20:28:39"
+  },
+  {
+    "id": "cc20d35a-d145-479a-9d0b-4fa35790e3ce",
+    "resume_id": "202504-01",
+    "recommend_reason": "",
+    "status": "不通过",
+    "timestamp": "2025-04-18 20:28:42"
+  }
+]

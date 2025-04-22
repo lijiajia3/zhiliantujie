@@ -7,13 +7,19 @@ from typing import Optional
 import uvicorn
 from openai import OpenAI
 import os
+import joblib
 from datetime import datetime
 import hashlib
 import time
 import random
 import json
 from bson import ObjectId
+# === 模型加载代码 ===
+MODEL_PATH = "model.pkl"
+model = joblib.load(MODEL_PATH)
 
+MODEL2_PATH = "model2.pkl"
+model2 = joblib.load(MODEL2_PATH)
 
 import re
 from datetime import datetime
@@ -22,6 +28,8 @@ import joblib
 import tempfile
 import requests
 import docx2txt
+import anyio
+from fastapi import HTTPException
 import pdfplumber
 import pandas as pd
 
@@ -45,7 +53,7 @@ from mongodbapi import (
 
 client = OpenAI(
     api_key="sk-65f94c51220b4bb38bfb694b73c96279",
-    base_url="https://api.deepseek.com"
+    base_url="https://api.deepseek.com",
 )
 
 import json, os
@@ -83,7 +91,6 @@ APP_KEY = "0dae68817e8cfd3bdd2d2cc900c1bee0"
 APP_SECRET = "29d8935b8b6a"
 NONCE = "123456"
 sms_code_cache = {}
-
 def send_sms_code(phone):
     code = str(random.randint(100000, 999999))
     sms_code_cache[phone] = code
@@ -96,21 +103,21 @@ def send_sms_code(phone):
         "key": "7a5b82404fd9b83327bfb81629b86a51"
     }
 
+    print("📤 正在发送验证码，payload 为：", payload)
     response = requests.post(url, data=payload)
     return response.json(), code
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://113.46.143.235",       # 正式伺服器 IP
+        "http://localhost:3000",       # 本地開發
+        "http://127.0.0.1:3000"        # 本地開發（某些瀏覽器）
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
-
-MODEL_PATH = "model.pkl"
-model = joblib.load(MODEL_PATH)
-MODEL2_PATH = "model2.pkl"
-model2 = joblib.load(MODEL2_PATH)
 
 def extract_text(file: UploadFile) -> str:
     suffix = file.filename.lower()
@@ -179,6 +186,7 @@ def ensure_all_features(features: dict) -> dict:
     return features
 
 
+
 async def generate_gpt_report(resume_text: str, score: int) -> str:
     prompt = f"""
 请根据以下简历内容和模型评分撰写简要的分析报告，内容包括：优点、缺点、改进建议。
@@ -187,14 +195,20 @@ async def generate_gpt_report(resume_text: str, score: int) -> str:
 简历内容如下：
 {resume_text}
 """
-    response = await client.chat.completions.create(
-        model="deepseek-reasoner",
-        messages=[
-            {"role": "system", "content": "你是一位人力资源分析师，请根据以下简历内容和模型评分撰写分析报告"},
-            {"role": "user", "content": prompt}
-        ],
-        stream=False
-    )
+    try:
+        response = await anyio.to_thread.run_sync(
+            lambda: client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "你是一位人力资源分析师，请根据以下简历内容和模型评分撰写分析报告"},
+                    {"role": "user",   "content": prompt}
+                ],
+                stream=False
+            )
+        )
+    except Exception as e:
+        raise HTTPException(502, f"AI 服务调用失败：{e}")
+
     return response.choices[0].message.content
 
 def extract_recommended_position(text: str) -> str:
@@ -203,7 +217,7 @@ def extract_recommended_position(text: str) -> str:
     if match:
         return match.group(1).strip()
     return "暂无明确岗位推荐"
-@app.post("/api/recommend")
+@app.post("/recommend")
 async def hr_recommend(data: dict):
     print("🟡 接收到推荐数据：", data)
     db = await recommend_col.find().to_list(length=None)
@@ -250,7 +264,7 @@ async def hr_recommend(data: dict):
     print("✅ 已保存推荐记录：", record)
     return {"message": "推荐成功", "data": record}
 
-@app.patch("/api/recommend/{recommend_id}")
+@app.patch("/recommend/{recommend_id}")
 async def update_recommend_status(recommend_id: str, payload: dict):
     item = await recommend_col.find_one({"id": recommend_id})
     if not item:
@@ -267,69 +281,69 @@ async def update_recommend_status(recommend_id: str, payload: dict):
         await talent_pool_col.insert_one(item)
 
     return {"message": "状态已更新", "status": new_status}
-@app.get("/api/recommend")
+@app.get("/recommend")
 async def get_recommend_list(status: str = "全部"):
     db = await recommend_col.find().to_list(length=None)
     if status == "全部":
         return {"data": db}
     return {"data": [item for item in db if item.get("status") == status]}
-@app.post("/api/recommend/approve")
+@app.post("/recommend/approve")
 async def leader_approve(data: dict):
     await recommend_col.update_one({"id": data["id"]}, {"$set": {"status": data["decision"]}})
     return {"message": "已处理"}
 
-@app.post("/api/analyze-resume")
+@app.post("/analyze-resume")
+@app.post("/analyze-resume")
 async def analyze_resume(file: UploadFile = File(...)):
     try:
+        # 1. 提取文本
         resume_text = extract_text(file)
         print("✅ 简历内容片段：", resume_text[:200])
 
+        # 2. 提取、补全特征
         features = extract_structured_features(resume_text)
         print("✅ 提取的特征：", features)
-
-        
-
-        
         features = ensure_all_features(features)
         print("✅ 补全后的特征：", features)
 
+        # 3. 模型预测得分
         X_input = pd.DataFrame([{
-            "学历_x": features["学历_x"],
-            "经验_x": features["经验_x"],
-            "技能数_x": features["技能数_x"],
-            "证书数_x": features["证书数_x"],
-            "年龄_x": features["年龄_x"],
+            "学历_x":    features["学历_x"],
+            "经验_x":    features["经验_x"],
+            "技能数_x":  features["技能数_x"],
+            "证书数_x":  features["证书数_x"],
+            "年龄_x":    features["年龄_x"],
             "项目经验_x": features["项目经验_x"],
             "自我评分_x": features["自我评分_x"]
         }])
         score_raw = model.predict(X_input)[0]
         score = float(score_raw)
         if score <= 1 and model.__class__.__name__ == "RandomForestRegressor":
-            score = score * 100  
+            score = score * 100
         elif score <= 5:
-            score = score / 5 * 100 
+            score = score / 5 * 100
         print("✅ 规范化百分制评分：", score)
 
-        
-        analysis = generate_gpt_report(resume_text, score)
+        # 4. LLM 分析
+        analysis = await generate_gpt_report(resume_text, score)
         print("✅ LLM 分析报告：", analysis)
 
+        # 5. 岗位推荐 & 文本清洗
         recommended = extract_recommended_position(analysis)
+        analysis = re.sub(r"[\[\]]+", "", str(analysis))
 
-        analysis = str(analysis)
-        analysis = re.sub(r"[]+", "", analysis)
+        # 6. 构造存储 & 响应数据
         resume_id = generate_resume_id()
-
         result = {
             "score": int(score),
             "recommended_position": recommended,
             "analysis": analysis,
             "score_breakdown": {
-                "学历_x": features["学历_x"],
-                "经验_x": features["经验_x"],
-                "技能数_x": features["技能数_x"],
-                "证书数_x": features["证书数_x"],
-                "年龄_x": features["年龄_x"],
+                "学历_x":    features["学历_x"],
+                "经验_x":    features["经验_x"],
+                "技能数_x":  features["技能数_x"],
+                "证书数_x":  features["证书数_x"],
+                "年龄_x":    features["年龄_x"],
                 "项目经验_x": features["项目经验_x"],
                 "自我评分_x": features["自我评分_x"]
             },
@@ -338,14 +352,20 @@ async def analyze_resume(file: UploadFile = File(...)):
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        await resume_details_col.insert_one(result)
-        return result
+        # 7. 存入数据库，并返回纯 Python 类型
+        insert_result = await resume_details_col.insert_one(result)
+        # 如果需要把 MongoDB 的 _id 也返回，把它转成字符串
+        response = {
+            "id": str(insert_result.inserted_id),
+            **result
+        }
+        return response
 
     except Exception as e:
         print("❌ 出错了：", e)
-        return {"error": str(e)}
-
-@app.get("/api/employees")
+        # 返回 500 并告知客户端发生了什么
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/employees")
 async def get_employees():
     raw = await employees_col.find().to_list(length=None)
     formatted = [
@@ -361,7 +381,7 @@ async def get_employees():
     ]
     return {"data": formatted}
 
-@app.get("/api/leader/employees")
+@app.get("/leader/employees")
 async def get_leader_employees(request: Request):
     username = request.cookies.get("current_user")
     if not username:
@@ -374,7 +394,7 @@ async def get_leader_employees(request: Request):
         return all_teams.get(username, [])
     return []
 
-@app.post("/api/leader/add-by-id")
+@app.post("/leader/add-by-id")
 async def add_employee_by_id(data: dict, request: Request):
     employee_id = data.get("id")
     if not employee_id:
@@ -408,7 +428,7 @@ async def add_employee_by_id(data: dict, request: Request):
 
     return matched
 
-@app.post("/api/employees")
+@app.post("/employees")
 async def add_employees(request: Request, employees: list[dict] = Body(...)):
     print("🟡 接收到员工数据：", employees)
     username = request.cookies.get("current_user")
@@ -440,7 +460,7 @@ async def add_employees(request: Request, employees: list[dict] = Body(...)):
     print("✅ 已保存员工数据，共计：", len(employees))
     return {"message": "员工数据已保存", "count": len(employees)}
 
-@app.post("/api/chart-data")
+@app.post("/chart-data")
 async def chart_data(file: UploadFile = File(...)):
     print("✅ 收到 chart-data 请求")
     try:
@@ -497,7 +517,7 @@ async def chart_data(file: UploadFile = File(...)):
 
 from mongodbapi import find_user_by
 
-@app.post("/api/login")
+@app.post("/login")
 async def login(request: Request):
     data = await request.json()
     identifier = data.get("identifier")
@@ -536,7 +556,7 @@ async def login(request: Request):
         print("❌ 登录失败：未找到匹配用户或密码错误", identifier, password)
     raise FastAPIHTTPException(status_code=401, detail="用户名或密码错误")
 
-@app.post("/api/verify-code")
+@app.post("/verify-code")
 async def verify_code(data: dict):
     from mongodbapi import find_user_by, update_user
     
@@ -560,7 +580,7 @@ from pydantic import BaseModel
 class PhoneNumber(BaseModel):
     phone: str
 
-@app.post("/api/send-code")
+@app.post("/send-code")
 async def send_code(payload: PhoneNumber):
     result, code = send_sms_code(payload.phone)
     print(f"✅ 已发送验证码 {code} 到手机号 {payload.phone}，返回：{result}")
@@ -569,7 +589,7 @@ async def send_code(payload: PhoneNumber):
     else:
         return {"message": "发送失败", "detail": result}
 
-@app.post("/api/validate-code-only")
+@app.post("/validate-code-only")
 async def validate_code_only(data: dict):
     phone = data.get("phone")
     code = data.get("code")
@@ -580,7 +600,7 @@ async def validate_code_only(data: dict):
 
 from mongodbapi import insert_user, find_user_by
 
-@app.post("/api/register")
+@app.post("/register")
 async def register(data: dict):
     phone = data.get("phone")
     code = data.get("code")
@@ -607,7 +627,7 @@ async def register(data: dict):
     await insert_user(new_user)
 
     return {"message": "注册成功", "user": new_user}
-@app.post("/api/llm/analyze-resume")
+@app.post("/llm/analyze-resume")
 async def llm_analyze_resume(data: dict):
     resume_id = data.get("resume_id")
     if not resume_id:
@@ -670,7 +690,7 @@ async def llm_analyze_resume(data: dict):
         print("❌ LLM 分析失败：", e)
         raise FastAPIHTTPException(status_code=500, detail="LLM 分析失败")
 
-@app.post("/api/save-analysis")
+@app.post("/save-analysis")
 async def save_analysis(payload: dict):
     resume_id = payload.get("resume_id")
     score = payload.get("score")
@@ -700,7 +720,7 @@ async def save_analysis(payload: dict):
         })
 
     return {"message": "分析结果已保存", "resume_id": resume_id}
-@app.post("/api/verify-code-login")
+@app.post("/verify-code-login")
 async def verify_code_login(data: dict):
     phone = data.get("phone")
     code = data.get("code")
@@ -741,7 +761,7 @@ async def verify_code_login(data: dict):
     )
     return response
 
-@app.post("/api/llm/promotion")
+@app.post("/llm/promotion")
 async def llm_promotion(data: dict):
     employee_id = str(data.get("id"))
     db = await employees_col.find().to_list(length=None)
@@ -777,7 +797,7 @@ async def llm_promotion(data: dict):
         print("❌ 获取升职建议失败：", e)
         raise FastAPIHTTPException(status_code=500, detail="生成升职建议失败，请稍后重试")
 
-@app.post("/api/llm/dismissal")
+@app.post("/llm/dismissal")
 async def llm_dismissal(data: dict):
     employee_id = data.get("id")
     db = await employees_col.find().to_list(length=None)
@@ -821,7 +841,7 @@ async def llm_dismissal(data: dict):
         "raw": content
     }
 
-@app.post("/api/llm/interactive-eval")
+@app.post("/llm/interactive-eval")
 async def llm_interactive_eval(payload: dict):
     print("📥 收到交互请求 payload：", payload)  
     resume_id = payload.get("resume_id")
@@ -867,27 +887,27 @@ async def llm_interactive_eval(payload: dict):
         print("❌ 交互式分析失败：", traceback.format_exc())
         raise FastAPIHTTPException(status_code=500, detail="LLM 分析失败")
 
-@app.post("/api/talent")
+@app.post("/talent")
 async def add_talent(entry: dict):
     await talent_pool_col.insert_one(entry)
     count = await talent_pool_col.count_documents({})
     return {"message": "已保存", "count": count}
 
-@app.get("/api/talent")
+@app.get("/talent")
 async def get_talent_pool():
     return await talent_pool_col.find().to_list(length=None)
 
-@app.get("/api/talent-pool")
+@app.get("/talent-pool")
 async def get_talent_pool_data():
     return await talent_pool_col.find().to_list(length=None)
 
-@app.post("/api/talent-pool")
+@app.post("/talent-pool")
 async def add_talent_pool_entry(entry: dict):
     await talent_pool_col.insert_one(entry)
     count = await talent_pool_col.count_documents({})
     return {"message": "添加成功", "count": count}
 
-@app.delete("/api/employees/{employee_id}")
+@app.delete("/employees/{employee_id}")
 async def delete_employee_by_id(employee_id: str):
     # Attempt to match by MongoDB _id first
     filter_criteria = {"$or": []}
@@ -903,7 +923,7 @@ async def delete_employee_by_id(employee_id: str):
     result = await employees_col.delete_one(filter_criteria)
     return result.deleted_count
 
-@app.post("/api/promotion/submit-to-hr")
+@app.post("/promotion/submit-to-hr")
 async def submit_promotion_to_hr(payload: dict):
     suggestion_record = {
         "id": generate_id(),
@@ -918,7 +938,7 @@ async def submit_promotion_to_hr(payload: dict):
     await promotion_suggestions_col.insert_one(suggestion_record)
     return {"message": "升职建议已提交给 HR", "data": suggestion_record}
 
-@app.post("/api/dismissal/submit-to-hr")
+@app.post("/dismissal/submit-to-hr")
 async def submit_dismissal_to_hr(payload: dict):
     suggestion_record = {
         "id": generate_id(),
@@ -934,7 +954,7 @@ async def submit_dismissal_to_hr(payload: dict):
     await dismissal_suggestions_col.insert_one(suggestion_record)
     return {"message": "开除建议已提交给 HR", "data": suggestion_record}
 
-@app.get("/api/current-user")
+@app.get("/current-user")
 async def get_current_user(request: Request):
     print("🧪 Cookie 全部内容：", request.cookies)
     username = request.cookies.get("current_user")
@@ -956,7 +976,7 @@ async def get_current_user(request: Request):
 
 from fastapi import Depends
 
-@app.post("/api/logout")
+@app.post("/logout")
 async def logout():
     response = JSONResponse({"message": "已退出登录"})
     response.delete_cookie("current_user")
@@ -972,14 +992,14 @@ def get_current_user_role(request: Request) -> str:
         raise FastAPIHTTPException(status_code=404, detail="用户不存在")
     return user["role"]
 
-@app.get("/api/promotion/pending")
+@app.get("/promotion/pending")
 async def get_pending_promotions():
     from mongodbapi import promotion_suggestions_col
     data = await promotion_suggestions_col.find({"status": "待处理"}).to_list(length=None)
     return {"data": data}
 
 
-@app.get("/api/tracking/pending")
+@app.get("/tracking/pending")
 async def get_tracking_tasks():
     promotions = await promotion_suggestions_col.find({"status": "处理中"}).to_list(length=None)
     dismissals = await dismissal_suggestions_col.find({"status": "处理中"}).to_list(length=None)
@@ -988,7 +1008,7 @@ async def get_tracking_tasks():
         "dismissal": dismissals
     }
 
-@app.post("/api/promotion/mark-done")
+@app.post("/promotion/mark-done")
 async def mark_promotion_done(data: dict):
     employee_id = str(data.get("employee_id"))
     db = await promotion_suggestions_col.find().to_list(length=None)
@@ -998,7 +1018,7 @@ async def mark_promotion_done(data: dict):
     await promotion_suggestions_col.replace_one({"id": item["id"]}, item)
     return {"message": "升职建议已处理"}
 
-@app.post("/api/dismissal/mark-done")
+@app.post("/dismissal/mark-done")
 async def mark_dismissal_done(data: dict):
     employee_id = str(data.get("employee_id"))
     record = await dismissal_suggestions_col.find_one({"employee_id": employee_id, "status": "待处理"})
@@ -1009,14 +1029,14 @@ async def mark_dismissal_done(data: dict):
         )
     return {"message": "开除建议已处理"}
 
-@app.delete("/api/talent/{talent_id}")
+@app.delete("/talent/{talent_id}")
 async def delete_talent(talent_id: str):
     result = await talent_pool_col.delete_one({"id": talent_id})
     if result.deleted_count == 0:
         raise FastAPIHTTPException(status_code=404, detail="未找到对应记录")
     return {"message": "人才库记录已删除", "id": talent_id}
 
-@app.post("/api/batch-analyze-resumes-model2")
+@app.post("/batch-analyze-resumes-model2")
 async def batch_analyze_resumes_model2(files: list[UploadFile] = File(...)):
     if len(files) > 20:
         raise FastAPIHTTPException(status_code=400, detail="上传文件数量不能超过 20 个")
@@ -1110,14 +1130,14 @@ async def batch_analyze_resumes_model2(files: list[UploadFile] = File(...)):
 
     return {"message": "批量简历分析完成", "count": len(summary), "summary": summary}
 
-@app.get("/api/batch-resume/{resume_id}")
+@app.get("/batch-resume/{resume_id}")
 async def get_resume_analysis(resume_id: str):
     item = await resume_details_col.find_one({"resume_id": resume_id})
     if not item:
         raise FastAPIHTTPException(status_code=404, detail="未找到简历分析记录")
     return {"data": item}
 
-@app.get("/api/resume-report/{resume_id}")
+@app.get("/resume-report/{resume_id}")
 async def get_resume_report(resume_id: str):
     item = await resume_details_col.find_one({"resume_id": resume_id})
     
@@ -1136,7 +1156,7 @@ async def get_resume_report(resume_id: str):
         "analysis": item.get("analysis")
     }
 
-@app.post("/api/batch-resume/{resume_id}/analyze")
+@app.post("/batch-resume/{resume_id}/analyze")
 async def analyze_resume_by_id(resume_id: str):
     item = await resume_details_col.find_one({"resume_id": resume_id})
     if not item:
@@ -1187,7 +1207,7 @@ async def analyze_resume_by_id(resume_id: str):
         print("❌ 分析失败：", e)
         raise FastAPIHTTPException(status_code=500, detail="分析失败")
 
-@app.post("/api/recommend-to-admin")
+@app.post("/recommend-to-admin")
 async def recommend_to_admin(data: dict):
     resume_id = data.get("resume_id")
     reason = data.get("reason")
@@ -1212,7 +1232,7 @@ async def recommend_to_admin(data: dict):
 
     return {"message": "推荐已提交至管理员审批", "data": record}
 
-@app.get("/api/admin/recommendations")
+@app.get("/admin/recommendations")
 async def get_admin_recommendations():
     print("✅ 管理员获取推荐数据")
     raw = await admin_recommendations_col.find().to_list(length=None)
@@ -1231,7 +1251,7 @@ async def get_admin_recommendations():
     ]
     return {"data": formatted}
 
-@app.patch("/api/admin/recommendations/{recommend_id}")
+@app.patch("/admin/recommendations/{recommend_id}")
 async def update_admin_recommendation(recommend_id: str, update: dict):
     result = await admin_recommendations_col.update_one(
         {"id": recommend_id},
@@ -1241,14 +1261,14 @@ async def update_admin_recommendation(recommend_id: str, update: dict):
         raise HTTPException(status_code=404, detail="推荐记录不存在")
     return {"message": "更新成功", "updated_id": recommend_id}
 
-@app.delete("/api/admin/recommendations/{recommend_id}")
+@app.delete("/admin/recommendations/{recommend_id}")
 async def delete_admin_recommendation(recommend_id: str):
     result = await admin_recommendations_col.delete_one({"id": recommend_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="推荐记录未找到")
     return {"message": "推荐记录已删除", "id": recommend_id}
 
-@app.post("/api/update-realname")
+@app.post("/update-realname")
 async def update_realname(request: Request, payload: dict = Body(...)):
     username = request.cookies.get("current_user")
     if not username:
@@ -1262,7 +1282,7 @@ async def update_realname(request: Request, payload: dict = Body(...)):
     await update_user({"username": username}, {"realname": realname})
     return {"message": "姓名已更新", "realname": realname}
 
-@app.post("/api/update-employee-id")
+@app.post("/update-employee-id")
 async def update_employee_id(request: Request, payload: dict = Body(...)):
     username = request.cookies.get("current_user")
     if not username:
@@ -1284,7 +1304,7 @@ async def update_employee_id(request: Request, payload: dict = Body(...)):
     await update_user({"username": username}, update_fields)
     
     return {"message": "工号已更新", "id": employee_id}
-@app.get("/api/employee/match-by-id/{employee_id}")
+@app.get("/employee/match-by-id/{employee_id}")
 async def match_employee_by_id(employee_id: str):
     db = await employees_col.find().to_list(length=None)
     employee = next((e for e in db if str(e.get("id") or e.get("工号")) == str(employee_id)), None)
@@ -1292,7 +1312,7 @@ async def match_employee_by_id(employee_id: str):
         raise FastAPIHTTPException(status_code=404, detail="未找到匹配的员工")
     return {"message": "匹配成功", "data": employee}
 
-@app.post("/api/employee/analyze-and-link")
+@app.post("/employee/analyze-and-link")
 async def analyze_and_link_employee(data: dict):
     employee_id = data.get("employee_id")
     if not employee_id:
@@ -1328,7 +1348,7 @@ async def analyze_and_link_employee(data: dict):
 
     return {"message": "分析完成并已绑定", "resume_id": resume_id, "analysis": result}
 
-@app.post("/api/task/submit")
+@app.post("/task/submit")
 async def submit_task(request: Request, payload: dict = Body(...)):
     username = request.cookies.get("current_user")
     if not username:
@@ -1361,11 +1381,11 @@ async def submit_task(request: Request, payload: dict = Body(...)):
     await submitted_tasks_col.insert_one(task_entry)
     return {"message": "任务已提交", "data": task_entry}
 
-@app.get("/api/submitted_tasks")
+@app.get("/submitted_tasks")
 async def get_submitted_tasks():
     return await submitted_tasks_col.find().to_list(length=None)
 
-@app.post("/api/score-task")
+@app.post("/score-task")
 async def score_task(payload: dict):
     task_id = payload.get("task_id")
     score = payload.get("score")
@@ -1529,7 +1549,7 @@ async def score_task(payload: dict):
             print("❌ 无简历分析生成失败：", e)
 
     return {"message": "评分成功并已加入动态追踪"}
-@app.get("/api/tracking/summary")
+@app.get("/tracking/summary")
 async def tracking_summary():
     
     suggestions = await promotion_suggestions_col.find().to_list(length=None)
@@ -1559,7 +1579,7 @@ async def tracking_summary():
         })
 
     return results
-@app.get("/api/analysis-results")
+@app.get("/analysis-results")
 async def get_analysis_results():
     log_path = "analysis_results.log"
     try:
@@ -1580,7 +1600,7 @@ async def get_analysis_results():
             log_file.write(f"[{datetime.now()}] ❌ 获取分析结果失败：{str(e)}\n")
     return {}
 
-@app.get("/api/profile")
+@app.get("/profile")
 async def get_profile(request: Request):
     username = request.cookies.get("current_user")
     if not username:
@@ -1600,7 +1620,7 @@ async def get_profile(request: Request):
         "id": user.get("id", "")
     }
 
-@app.get("/api/my-promotions")
+@app.get("/my-promotions")
 async def get_my_promotions(request: Request):
     username = request.cookies.get("current_user")
     if not username:

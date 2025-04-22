@@ -24,7 +24,7 @@ function AdminEmployeePage() {
   console.log("🛰 AdminEmployeePage render - modalIsOpen:", modalIsOpen, "selectedEmployee:", selectedEmployee);
 
   useEffect(() => {
-    axios.get("/api/employees").then(res => {
+    axios.get("/employees").then(res => {
       console.log("✅ 员工数据响应：", res.data);
       const fetched = res.data.data;
       if (Array.isArray(fetched)) {
@@ -115,7 +115,7 @@ function AdminEmployeePage() {
         />
         <div style={{ marginTop: 20 }}>
           <button onClick={() => {
-            axios.post("/api/employees/update", {
+            axios.post("/employees/update", {
               id: selectedEmployee?.id,
               recommended_position: updatedRecommendation,
               note: updatedNote,
@@ -183,7 +183,7 @@ function AdminEmployeePage() {
         />
         <div style={{ marginTop: 20 }}>
           <button onClick={() => {
-            axios.post("/api/employees/add", newEmployee)
+            axios.post("/employees/add", newEmployee)
               .then(res => {
                 console.log("✅ 添加成功：", res.data);
                 setAddModalOpen(false);

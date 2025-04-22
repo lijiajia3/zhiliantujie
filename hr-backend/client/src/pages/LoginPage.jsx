@@ -41,7 +41,7 @@ const LoginPage = () => {
     console.log("🚀 提交登录请求:", { identifier: emailOrPhone, password });
   
     try {
-      const response = await axios.post('http://113.46.143.235/api/login', {
+      const response = await axios.post('/api/login', {
         identifier: emailOrPhone,
         password: password
       }, {
@@ -68,7 +68,7 @@ const LoginPage = () => {
   
       if (role === 'admin') {
         navigate('/admin');
-        fetch('http://113.46.143.235/api/recommendation')
+        fetch('/api/recommendation')
           .then(res => res.json())
           .then(data => {
             setRecommendation(data?.message || '暂无推荐内容');
@@ -91,13 +91,14 @@ const LoginPage = () => {
       alert('登录失败，请检查账号密码');
     }
   };
+
   const handleSendCode = async () => {
     if (!phone) {
       alert('请输入手机号');
       return;
     }
     try {
-      await axios.post('http://113.46.143.235/api/send-code', { phone });
+      await axios.post('/api/send-code', { phone });
       setCountdown(60);
       const timer = setInterval(() => {
         setCountdown(prev => {
@@ -125,22 +126,18 @@ const LoginPage = () => {
         alert("请输入有效的11位手机号！");
         return;
       }
-      console.log('🚀 登录提交数据：', { phone, code });
-      const response = await axios.post('http://113.46.143.235/api/phone-login', {
+      const response = await axios.post('/api/phone-login', {
         phone: phone,
         code: code
       });
       console.log('✅ 验证码登录成功', response.data);
-      console.log(response.data);
       const role = response.data.role;
-      console.log('➡️ 即将跳转到页面：', role);
       localStorage.setItem('token', response.data.token || 'placeholder');
       localStorage.setItem('role', role);
       if (!role) {
         console.warn('⚠️ 登录失败：未返回角色字段');
         return;
       }
-      console.log('➡️ 即将跳转到页面：', role);
       if (role === 'admin') {
         navigate('/admin');
       } else if (role === 'hr') {
@@ -201,20 +198,20 @@ const LoginPage = () => {
             ) : (
               <>
                 <div className="input-group">
-                <input
-                  type="text"
-                  placeholder="请输入手机号"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+                  <input
+                    type="text"
+                    placeholder="请输入手机号"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
                 </div>
                 <div className="input-group">
-                <input
-                  type="text"
-                  placeholder="请输入验证码"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
+                  <input
+                    type="text"
+                    placeholder="请输入验证码"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
                 </div>
                 <div className="input-group">
                   <button className="send-code-btn" onClick={handleSendCode} disabled={countdown > 0}>

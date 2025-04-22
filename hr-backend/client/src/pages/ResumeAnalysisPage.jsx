@@ -18,7 +18,7 @@ const ResumeAnalysisPage = () => {
 
     try {
       setLoading(true);
-      const res = await axios.post('http://113.46.143.235:8000/api/analyze-resume', formData, {
+      const res = await axios.post('/api/analyze-resume', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         withCredentials: true
       });

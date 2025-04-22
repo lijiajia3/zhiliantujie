@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const request = axios.create({
-  baseURL: "",  
+  baseURL: "http://113.46.143.235",  
   timeout: 10000,
   withCredentials: true
 });

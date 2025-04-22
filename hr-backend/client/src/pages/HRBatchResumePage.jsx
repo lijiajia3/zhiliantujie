@@ -18,14 +18,13 @@ export default function HRBatchResumePage() {
     setFileMap(fileMap);
     setUploading(true);
     try {
-      const res = await axios.post("/batch-analyze-resumes-model2", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setResumeList(res.data.summary || []);
-      console.log("🧩 后端返回 summary：", res.data.summary);
+      const res = await axios.post("/batch-analyze-resumes-model2", formData);
+      const summary = Array.isArray(res.data?.summary) ? res.data.summary : [];
+      setResumeList(summary);
+      console.log("🧩 后端返回 summary：", summary);
     } catch (err) {
-      alert("❌ 上传失败");
-      console.error(err);
+      alert("❌ 上传失败：" + (err?.response?.data?.detail || err.message || "未知错误"));
+      console.error("🟥 上传异常详情：", err);
     } finally {
       setUploading(false);
     }
@@ -34,12 +33,11 @@ export default function HRBatchResumePage() {
   const handleRecommend = async (item) => {
     if (recommendedSet.has(item.resume_id)) return;
 
-    
-    const pureName = item.name.split("/").pop();
+    const pureName = item.name?.split("/").pop();
     let fileToUse = fileMap[pureName];
 
     if (!fileToUse) {
-      const possibleKey = Object.keys(fileMap).find(key => key.includes(pureName));
+      const possibleKey = Object.keys(fileMap).find((key) => key.includes(pureName));
       if (possibleKey) fileToUse = fileMap[possibleKey];
     }
 
@@ -53,7 +51,7 @@ export default function HRBatchResumePage() {
       try {
         const payload = {
           ...item,
-          pdf_base64: reader.result.split(",")[1], 
+          pdf_base64: reader.result.split(",")[1],
         };
         await axios.post("/recommend", payload);
         alert(`✅ 已加入人才储备库：${item.name}`);
@@ -81,6 +79,7 @@ export default function HRBatchResumePage() {
           disabled={uploading}
         />
       </div>
+
       {resumeList.length > 0 && (
         <table border="1" cellPadding="8" style={{ width: "100%", marginTop: "16px", borderCollapse: "collapse" }}>
           <thead>
@@ -94,25 +93,23 @@ export default function HRBatchResumePage() {
             </tr>
           </thead>
           <tbody>
-            {resumeList.map((item) => {
-              return (
-                <tr key={item.resume_id}>
-                  <td>{item.resume_id}</td>
-                  <td>{item.name}</td>
-                  <td>{item.score}</td>
-                  <td>{item["学历_x"]}</td>
-                  <td>{item["证书数_x"]}</td>
-                  <td>
-                    <button
-                      onClick={() => handleRecommend(item)}
-                      disabled={recommendedSet.has(item.resume_id)}
-                    >
-                      {recommendedSet.has(item.resume_id) ? "✅ 已加入" : "📥 加入人才储备库"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {resumeList.filter(item => item && item.resume_id).map((item) => (
+              <tr key={item.resume_id}>
+                <td>{item.resume_id}</td>
+                <td>{item.name || "未命名"}</td>
+                <td>{item.score ?? "无"}</td>
+                <td>{item["学历_x"] ?? "无"}</td>
+                <td>{item["证书数_x"] ?? "无"}</td>
+                <td>
+                  <button
+                    onClick={() => handleRecommend(item)}
+                    disabled={recommendedSet.has(item.resume_id)}
+                  >
+                    {recommendedSet.has(item.resume_id) ? "✅ 已加入" : "📥 加入人才储备库"}
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

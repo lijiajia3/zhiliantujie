@@ -22,7 +22,8 @@ const ResumeAnalysisPage = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
         withCredentials: true
       });
-      if (!res.data || !res.data.resume_id || res.data.score === undefined) {
+      if (!res.data || typeof res.data !== "object" || !res.data.resume_id || res.data.score === undefined) {
+        console.log("🔍 返回异常数据：", res.data);
         alert("❌ 返回数据不完整，请检查简历格式或稍后重试");
         setLoading(false);
         return;

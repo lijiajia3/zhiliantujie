@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 from openai import OpenAI
+from fastapi import HTTPException as FastAPIHTTPException
 import os
 import joblib
 from datetime import datetime
@@ -13,14 +14,12 @@ import hashlib
 import time
 import random
 import json
+
+from fastapi import APIRouter
 from bson import ObjectId
-
-MODEL_PATH = "model.pkl"
-model = joblib.load(MODEL_PATH)
-
-MODEL2_PATH = "model2.pkl"
-model2 = joblib.load(MODEL2_PATH)
-
+router = APIRouter()
+app = FastAPI()
+import json, os
 import re
 from datetime import datetime
 from fastapi import HTTPException as FastAPIHTTPException
@@ -34,8 +33,8 @@ import pdfplumber
 import pandas as pd
 
 from mongodbapi import employees_col
-
-
+app.include_router(router)
+router = APIRouter()
 from mongodbapi import (
     users_col,
     employees_col,
@@ -51,12 +50,19 @@ from mongodbapi import (
 )
 
 
+MODEL_PATH = "model.pkl"
+model = joblib.load(MODEL_PATH)
+app = FastAPI()
+MODEL2_PATH = "model2.pkl"
+model2 = joblib.load(MODEL2_PATH)
 client = OpenAI(
     api_key="sk-65f94c51220b4bb38bfb694b73c96279",
     base_url="https://api.deepseek.com",
 )
+class LoginRequest(BaseModel):
+    identifier: str
+    password: str
 
-import json, os
 async def get_recommend_db():
     return await recommend_col.find().to_list(length=None)
 
@@ -75,7 +81,7 @@ async def generate_resume_id():
 def generate_id():
     import uuid
     return str(uuid.uuid4())
-app = FastAPI()
+
 @app.on_event("startup")
 async def create_test_users():
     existing = await users_col.find({"username": {"$in": ["employee", "leader", "hr", "admin"]}}).to_list(length=None)
@@ -134,7 +140,56 @@ def extract_text(file: UploadFile) -> str:
         raise ValueError("Unsupported file type")
 
     return text.strip()
+@app.post("/interview-assist")
+async def interview_assist(request: Request):
+    data = await request.json()
+    resume_id = data.get("resume_id")
+    prompt = data.get("prompt")
 
+    if not resume_id or not prompt:
+        raise HTTPException(status_code=400, detail="resume_id 和 prompt 是必需的")
+
+    print("📩 面試助手收到：", resume_id, prompt)
+
+    # 從數據庫中獲取分析內容
+    record = await resume_details_col.find_one({"resume_id": resume_id})
+    if not record:
+        raise HTTPException(status_code=404, detail="未找到該簡歷分析內容")
+
+    analysis = record.get("analysis", "暫無分析結果")
+
+    prompt_text = f"""
+請根據以下簡歷分析內容與提問問題，幫我設計幾個延伸提問，評估候選人是否適合該崗位。
+
+簡歷分析內容：
+{analysis}
+
+面試問題：
+{prompt}
+"""
+
+    try:
+        response = await anyio.to_thread.run_sync(
+            lambda: client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "你是一位經驗豐富的企業 HR 面試助手"},
+                    {"role": "user", "content": prompt_text}
+                ],
+                stream=False
+            )
+        )
+        content = response.choices[0].message.content.strip()
+        return {"response": content}
+    except Exception as e:
+        print("❌ GPT 面試助手調用失敗：", e)
+        raise HTTPException(status_code=500, detail="面試助手服務失敗")
+@app.post("/batch-analyze-resumes-model2")
+async def batch_analyze_resumes_model2(files: list[UploadFile] = File(...)):
+    print("▶️ 收到上传文件数量：", len(files))
+    for f in files:
+        print(" ‑‑", f.filename)
+    ...
 def generate_resume_id(source_flag="0"):
     now = datetime.now()
     prefix = now.strftime("%Y%m%d")
@@ -293,7 +348,6 @@ async def leader_approve(data: dict):
     return {"message": "已处理"}
 
 @app.post("/analyze-resume")
-@app.post("/analyze-resume")
 async def analyze_resume(file: UploadFile = File(...)):
     try:
        
@@ -352,14 +406,22 @@ async def analyze_resume(file: UploadFile = File(...)):
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-
+        
         insert_result = await resume_details_col.insert_one(result)
 
-        response = {
-            "id": str(insert_result.inserted_id),
-            **result
+        inserted_id = insert_result.inserted_id
+
+        response_data = {
+           "id": str(inserted_id),
+            "score": result["score"],
+            "recommended_position": result["recommended_position"],
+           "analysis": result["analysis"],
+            "score_breakdown": result["score_breakdown"],
+            "resume_id": result["resume_id"],
+            "name": result["name"],
+            "timestamp": result["timestamp"],
         }
-        return response
+        return JSONResponse(content=response_data)
 
     except Exception as e:
         print("❌ 出错了：", e)
@@ -459,7 +521,13 @@ async def add_employees(request: Request, employees: list[dict] = Body(...)):
     db.extend(employees)
     print("✅ 已保存员工数据，共计：", len(employees))
     return {"message": "员工数据已保存", "count": len(employees)}
-
+@app.post("/employees/save")
+async def save_employees(data: list[dict]):
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="格式錯誤")
+    await employees_col.delete_many({})
+    await employees_col.insert_many(data)
+    return {"message": "保存成功", "count": len(data)}
 @app.post("/chart-data")
 async def chart_data(file: UploadFile = File(...)):
     print("✅ 收到 chart-data 请求")
@@ -517,11 +585,16 @@ async def chart_data(file: UploadFile = File(...)):
 
 from mongodbapi import find_user_by
 
+from pydantic import BaseModel
+
+class LoginRequest(BaseModel):
+    identifier: str
+    password: str
+
 @app.post("/login")
-async def login(request: Request):
-    data = await request.json()
-    identifier = data.get("identifier")
-    password = data.get("password")
+async def login(data: LoginRequest):
+    identifier = data.identifier
+    password = data.password
 
     user = await find_user_by({
         "$or": [
@@ -531,6 +604,7 @@ async def login(request: Request):
         ],
         "password": password
     })
+
     print(f"✅ 正在尝试登录：{identifier} / {password}")
 
     if user:
@@ -541,7 +615,8 @@ async def login(request: Request):
                 "username": user["username"],
                 "role": user["role"],
                 "email": user["email"]
-            }
+            },
+            "token": "dummy-token"
         })
         response.set_cookie(
             key="current_user",
@@ -549,13 +624,12 @@ async def login(request: Request):
             httponly=True,
             samesite="lax",
             secure=False,
-            path="/"  
+            path="/"
         )
         return response
     else:
         print("❌ 登录失败：未找到匹配用户或密码错误", identifier, password)
-    raise FastAPIHTTPException(status_code=401, detail="用户名或密码错误")
-
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
 @app.post("/verify-code")
 async def verify_code(data: dict):
     from mongodbapi import find_user_by, update_user
@@ -575,7 +649,6 @@ async def verify_code(data: dict):
     await update_user({"phone": phone}, {"password": new_password})
     return {"message": "验证成功，密码已更新", "success": True}
 
-from pydantic import BaseModel
 
 class PhoneNumber(BaseModel):
     phone: str

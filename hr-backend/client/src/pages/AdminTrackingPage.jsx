@@ -69,12 +69,19 @@ export default function AdminTrackingPage() {
 
         // 构建员工 ID -> 姓名 映射
         const map = {};
-        (employeesRes.data || []).forEach(emp => {
-          const id = String(emp.id || emp["工号"] || "");
-          const name = emp.realname || emp.name || emp["姓名"] || "";
-          map[id] = name;
-        });
-        setEmployeesMap(map);
+        const employeesRaw = employeesRes.data;
+        const employeeList = Array.isArray(employeesRaw)
+           ? employeesRaw
+            : Array.isArray(employeesRaw?.data)
+            ? employeesRaw.data
+    : [];
+
+employeeList.forEach(emp => {
+  const id = String(emp.id || emp["工号"] || "");
+  const name = emp.realname || emp.name || emp["姓名"] || "";
+  map[id] = name;
+});
+setEmployeesMap(map);
       } catch (err) {
         console.error("❌ 获取数据失败", err);
         setError(err.response?.data?.message || err.message || "获取数据失败，请稍后重试");

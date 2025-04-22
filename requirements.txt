@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+motor
+pymongo
+openai
+python-dotenv
+pandas
+matplotlib
+scikit-learn
+joblib
+requests
+pdfplumber
+docx2txt
+python-multipart

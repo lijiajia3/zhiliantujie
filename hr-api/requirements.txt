@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+openai
+pdfplumber
+python-docx
+pydantic
+python-multipart
+requests
+joblib
+docx2txt
+pandas

@@ -1,0 +1,55 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "hr_user",
+      "password": "password123",
+      "role": "hr",
+      "email": "hr@sxrjhc.cn",
+      "debug": true
+    },
+    {
+      "id": "2025611",
+      "username": "leader_user",
+      "password": "password123",
+      "role": "leader",
+      "email": "leader@sxrjhc.cn",
+      "debug": true
+    },
+    {
+      "id": "202411",
+      "username": "admin_user",
+      "password": "password123",
+      "role": "admin",
+      "email": "admin@esxrjhc.cn",
+      "debug": true
+    },
+    {
+      "id": "240431",
+      "username": "ee",
+      "password": "jx060817",
+      "role": "hr",
+      "email": "ee@esxrjhc.cn",
+      "phone": "13113611578",
+      "realname": "朱文才"
+    },
+    {
+      "id": "240427",
+      "username": "em",
+      "password": "jx060817",
+      "role": "employee",
+      "email": "employee@sxrjhc.cn",
+      "phone": "13113612578",
+      "realname": "黄艳春"
+    },
+    {
+      "id": "240406",
+      "username": "em2",
+      "password": "jx060817",
+      "role": "employee",
+      "email": "employee2@sxrjhc.cn",
+      "phone": "",
+      "realname": "采振祥"
+    }
+  ]
+}

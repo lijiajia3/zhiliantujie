@@ -231,52 +231,65 @@ export default function EmployeeManagePage() {
           </tr>
         </thead>
         <tbody>
-          {employees.map((emp, idx) => (
-            <tr
-              key={idx}
-              style={{
-                borderTop: "1px solid #ccc",
-                transition: "background-color 0.3s ease",
-                cursor: "pointer"
+  {employees.map((emp) => (
+    <tr key={emp.id}>
+      <td>{emp.name}</td>
+      <td>{emp.id}</td>
+      <td>{emp.position}</td>
+      <td>{emp.experience}</td>
+      <td>{emp.status || "—"}</td>
+
+      {/* ------- 操作：建议升职 ------- */}
+      <td>
+        {currentUser.role === "hr" ? (
+          promotionPendingList.some((p) => p.employee_id === emp.id) ? (
+            <button
+              onClick={async () => {
+                await axios.post("/promotion/mark-done", { employee_id: emp.id });
+                setPromotionPendingList(
+                  promotionPendingList.filter((p) => p.employee_id !== emp.id)
+                );
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f0f4f8")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
             >
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>{emp.name}</td>
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>{emp.id}</td>
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>{emp.position}</td>
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>{emp.experience}</td>
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>{emp.status}</td>
-              <td style={{ textAlign: "center" }}>
-                {currentUser.role === "hr" ? (
-                promotionPendingList.some(p => p.employee_id === emp.id) ? (
-                    <button onClick={async () => {
-                      await axios.post("/promotion/mark-done", { employee_id: emp.id });
-                      setPromotionPendingList(promotionPendingList.filter(p => p.employee_id !== emp.id));
-                    }}>✅ 已处理</button>
-                  ) : "—"
-                ) : (
-                  <button onClick={() => handlePromotion(emp)}>建议升职</button>
-                )}
-              </td>
-              <td style={{ textAlign: "center" }}>
-                {currentUser.role === "hr" ? (
-                dismissalPendingList.some(p => p.employee_id === emp.id) ? (
-                    <button onClick={async () => {
-                      await axios.post("/dismissal/mark-done", { employee_id: emp.id });
-                      setDismissalPendingList(dismissalPendingList.filter(p => p.employee_id !== emp.id));
-                    }}>✅ 已处理</button>
-                  ) : "—"
-                ) : (
-                  <button onClick={() => handleDismissal(emp)}>建议开除</button>
-                )}
-              </td>
-              <td style={{ padding: "14px 12px", textAlign: "center" }}>
-                <button onClick={() => handleDelete(emp.id)}>删除</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
+              ✅ 处理完毕
+            </button>
+          ) : (
+            <span style={{ color: "#999" }}>无待处理</span>
+          )
+        ) : (
+          <button onClick={() => handlePromotion(emp)}>📈 发起升职</button>
+        )}
+      </td>
+
+      {/* ------- 操作：建议开除 ------- */}
+      <td>
+        {currentUser.role === "hr" ? (
+          dismissalPendingList.some((p) => p.employee_id === emp.id) ? (
+            <button
+              onClick={async () => {
+                await axios.post("/dismissal/mark-done", { employee_id: emp.id });
+                setDismissalPendingList(
+                  dismissalPendingList.filter((p) => p.employee_id !== emp.id)
+                );
+              }}
+            >
+              ✅ 处理完毕
+            </button>
+          ) : (
+            <span style={{ color: "#999" }}>无待处理</span>
+          )
+        ) : (
+          <button onClick={() => handleDismissal(emp)}>📉 发起开除</button>
+        )}
+      </td>
+
+      {/* ------- 操作：删除 ------- */}
+      <td>
+        <button onClick={() => handleDelete(emp.id)}>🗑️ 删除</button>
+      </td>
+    </tr>
+  ))}
+</tbody>
       </table>
       <div style={{ marginTop: "20px" }}>
         <button

@@ -7,31 +7,39 @@ export default function TalentPoolPage() {
   const navigate = useNavigate();
 
   const [talentPool, setTalentPool] = useState([]);
-  
-  useEffect(() => {
-    axios.get("/talent-pool")
-      .then(res => {
-        if (Array.isArray(res.data)) {
-          setTalentPool(res.data);
-        }
-      }).catch(err => {
-        console.error("获取人才库失败", err);
-      });
-  }, []);
-  
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`/talent-pool/${id}`)
-      setTalentPool(talentPool.filter((item) => item.id !== id));
-    } catch (error) {
-      console.error("❌ 删除失败", error);
-    }
-  };
-
+  const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', skills: '' });
 
-  const handleAdd = () => {
+  useEffect(() => {
+    setLoading(true);
+    axios.get("/talent-pool")
+      .then(res => {
+        const data = res.data;
+        if (Array.isArray(data)) {
+          setTalentPool(data);
+        } else if (data && Array.isArray(data.data)) {
+          setTalentPool(data.data);
+        } else {
+          console.warn("⚠️ /talent-pool 返回格式异常：", data);
+          setTalentPool([]);
+        }
+      }).catch(err => {
+        console.error("❌ 获取人才库失败", err);
+      }).finally(() => setLoading(false));
+  }, []);
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`/talent-pool/${id}`);
+      setTalentPool(talentPool.filter((item) => item.id !== id));
+    } catch (error) {
+      console.error("❌ 删除失败", error);
+      alert("删除失败，请稍后再试");
+    }
+  };
+
+  const handleAdd = async () => {
     const now = new Date();
     const id = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(talentPool.length + 1).padStart(3, '0')}`;
     const newEntry = {
@@ -41,19 +49,23 @@ export default function TalentPoolPage() {
       recommender: localStorage.getItem('username') || 'HR用户',
       addedAt: now.toISOString().slice(0, 10)
     };
-    axios.post("/talent-pool", newEntry)
-      .catch(err => {
-        console.error("保存失败", err);
-      });
-    setTalentPool([...talentPool, newEntry]);
-    setFormData({ name: '', skills: '' });
-    setShowForm(false);
+    try {
+      await axios.post("/talent-pool", newEntry);
+      setTalentPool(prev => [...prev, newEntry]);
+      setFormData({ name: '', skills: '' });
+      setShowForm(false);
+    } catch (err) {
+      console.error("❌ 保存失败", err);
+      alert("❌ 保存失败，请稍后再试");
+    }
   };
 
   return (
     <div className="p-6">
       <h1 className="text-3xl font-extrabold text-gray-800 mb-2">🎯 人才储备库</h1>
       <p className="text-gray-600 mb-6">展示未录用但具潜力的候选人信息，方便后续评估与追踪。</p>
+
+      {loading && <p className="text-blue-500">⏳ 正在加载人才库数据...</p>}
 
       {(role === 'admin' || role === 'hr') && (
         <>

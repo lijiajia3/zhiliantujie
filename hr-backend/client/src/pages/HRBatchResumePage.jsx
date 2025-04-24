@@ -8,23 +8,43 @@ export default function HRBatchResumePage() {
   const [fileMap, setFileMap] = useState({});
 
   const handleUpload = async (e) => {
-    const files = Array.from(e.target.files);
+    const rawFiles = Array.from(e.target.files);
+    const files = rawFiles.filter(
+      file =>
+        !file.name.startsWith('.') &&
+        /\.(pdf|docx)$/i.test(file.name)
+    );
+
+    if (files.length === 0) {
+      alert("❌ 没有有效的简历文件（仅支持 .pdf 和 .docx）");
+      return;
+    }
+
     const formData = new FormData();
-    const fileMap = {};
+    const newFileMap = {};
     files.forEach((file) => {
       formData.append("files", file);
-      fileMap[file.name.replace(/\.(pdf|docx?)$/, "")] = file;
+      newFileMap[file.name.replace(/\.(pdf|docx?)$/, "")] = file;
     });
-    setFileMap(fileMap);
+
+    setFileMap(newFileMap);
     setUploading(true);
+
     try {
-      const res = await axios.post("/batch-analyze-resumes-model2", formData);
-      const summary = Array.isArray(res.data?.summary) ? res.data.summary : [];
+      const res = await axios.post("/batch-analyze-resumes-brief", formData);
+      const summary = Array.isArray(res.data) ? res.data : [];
+
+      if (!summary.length) {
+        console.warn("⚠️ 后端返回空数组或无数据", res);
+        alert("❌ 没有分析出任何简历，请检查文件内容是否规范");
+      }
+
+      console.log("🧩 返回原始数据：", res);
       setResumeList(summary);
       console.log("🧩 后端返回 summary：", summary);
     } catch (err) {
-      alert("❌ 上传失败：" + (err?.response?.data?.detail || err.message || "未知错误"));
-      console.error("🟥 上传异常详情：", err);
+      console.error("❌ 上传失败：", err);
+      alert("❌ 上传失败：" + (err?.response?.data?.detail || err.message || "服务器无响应"));
     } finally {
       setUploading(false);
     }

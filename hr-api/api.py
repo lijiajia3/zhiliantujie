@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from fastapi import FastAPI, UploadFile, File, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +11,7 @@ import os
 import joblib
 from datetime import datetime
 import hashlib
+from passlib.context import CryptContext
 import time
 import random
 import json
@@ -83,21 +84,21 @@ def generate_id():
     import uuid
     return str(uuid.uuid4())
 
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 @app.on_event("startup")
 async def create_test_users():
     existing = await users_col.find({"username": {"$in": ["employee", "leader", "hr", "admin"]}}).to_list(length=None)
     if len(existing) < 4:
         await users_col.delete_many({"username": {"$in": ["employee", "leader", "hr", "admin"]}})
+        hashed = pwd_context.hash("123456")
         await users_col.insert_many([
-            {"username": "employee", "password": "123456", "role": "employee", "phone": "", "email": "", "realname": "测试员工", "id": ""},
-            {"username": "leader", "password": "123456", "role": "leader", "phone": "", "email": "", "realname": "测试主管", "id": ""},
-            {"username": "hr", "password": "123456", "role": "hr", "phone": "", "email": "", "realname": "测试HR", "id": ""},
-            {"username": "admin", "password": "123456", "role": "admin", "phone": "", "email": "", "realname": "超级管理员", "id": ""}
+            {"username": "employee", "password": hashed, "role": "employee", "phone": "", "email": "", "realname": "测试员工", "id": ""},
+            {"username": "leader", "password": hashed, "role": "leader", "phone": "", "email": "", "realname": "测试主管", "id": ""},
+            {"username": "hr",      "password": hashed, "role": "hr",      "phone": "", "email": "", "realname": "测试HR", "id": ""},
+            {"username": "admin",   "password": hashed, "role": "admin",   "phone": "", "email": "", "realname": "超级管理员", "id": ""}
         ])
-APP_KEY = "0dae68817e8cfd3bdd2d2cc900c1bee0"
-APP_SECRET = "29d8935b8b6a"
-NONCE = "123456"
-
 def send_sms_code(phone):
     
     code = str(random.randint(100000, 999999))
@@ -664,23 +665,43 @@ class LoginRequest(BaseModel):
     identifier: str
     password: str
 
+
+# 初始化加密器（未来要用）
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 是否启用加密模式（目前为 False，未来可改成 True）
+ENCRYPTED_MODE = True
+
 @app.post("/login")
 async def login(data: LoginRequest):
     identifier = data.identifier
     password = data.password
+    
 
+    # Step 1: 查用户（不带密码）
     user = await find_user_by({
         "$or": [
             {"username": identifier},
             {"email": identifier},
             {"phone": identifier}
-        ],
-        "password": password
+        ]
     })
 
     print(f"✅ 正在尝试登录：{identifier} / {password}")
 
+    # Step 2: 校验密码
     if user:
+        db_password = user.get("password", "")
+        if ENCRYPTED_MODE:
+            if not pwd_context.verify(password, db_password):
+                print("❌ 密码加密校验失败")
+                raise HTTPException(status_code=401, detail="用户名或密码错误")
+        else:
+            if password != db_password:
+                print("❌ 明文密码不匹配")
+                raise HTTPException(status_code=401, detail="用户名或密码错误")
+        print("🚀 当前加密模式：", ENCRYPTED_MODE)
+
         print(f"✅ 登录成功：{user['username']}（角色：{user['role']}）")
         response = JSONResponse({
             "message": "登录成功",
@@ -700,9 +721,9 @@ async def login(data: LoginRequest):
             path="/"
         )
         return response
-    else:
-        print("❌ 登录失败：未找到匹配用户或密码错误", identifier, password)
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    print("❌ 登录失败：用户不存在")
+    raise HTTPException(status_code=401, detail="用户名或密码错误")
 @app.post("/verify-code")
 async def verify_code(data: dict):
     from mongodbapi import find_user_by, update_user
@@ -719,7 +740,8 @@ async def verify_code(data: dict):
     if not matched_user:
         raise FastAPIHTTPException(status_code=404, detail="用户未注册")
     
-    await update_user({"phone": phone}, {"password": new_password})
+    hashed_new_password = pwd_context.hash(new_password)
+    await update_user({"phone": phone}, {"password": hashed_new_password})  # ✅ 加密后更新
     return {"message": "验证成功，密码已更新", "success": True}
 
 
@@ -763,10 +785,12 @@ async def register(data: dict):
     existing_user = await find_user_by({"username": username})
     if existing_user:
         raise FastAPIHTTPException(status_code=400, detail="用户名已存在")
+    hashed_password = pwd_context.hash(password)
 
     new_user = {
+        
         "username": username,
-        "password": password,
+        "password": hashed_password,
         "role": "hr",
         "email": f"{username}@example.com",
         "phone": phone
@@ -1525,7 +1549,9 @@ async def analyze_and_link_employee(data: dict):
     )
 
     return {"message": "分析完成并已绑定", "resume_id": resume_id, "analysis": result}
-
+@app.get("/tasks")
+async def get_tasks():
+    return await submitted_tasks_col.find().to_list(length=None)
 @app.post("/task/submit")
 async def submit_task(request: Request, payload: dict = Body(...)):
     username = request.cookies.get("current_user")

@@ -239,14 +239,61 @@ const LoginPage = () => {
           </div>
         </div>
         <div className="side-section" />
-      </div>
+        </div>
       <div className="footer">Copyright©2025 瑞佳恒创</div>
+
       <div className="footer-links" style={{ textAlign: 'center', fontSize: '13px', color: '#888', marginTop: '10px' }}>
         <Link to="/about">关于</Link> · 
         <Link to="/contact" style={{ marginLeft: '8px' }}>联系我们</Link>
       </div>
+
+      {!navigator.userAgent.toLowerCase().includes("electron") && (
+  <div style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginTop: '20px', marginBottom: '30px' }}>
+    <h4 style={{ marginBottom: '8px', fontWeight: 'bold' }}>💻 智链图解客户端下载</h4>
+
+    {(() => {
+      const platform = navigator.platform.toLowerCase();
+      const isMac = platform.includes("mac");
+      const isWin = platform.includes("win");
+      const isLinux = platform.includes("linux");
+
+      const highlight = (active) => active ? { fontWeight: 'bold', color: '#007bff' } : {};
+
+      return (
+        <div style={{ lineHeight: '1.8' }}>
+          <a
+            href="http://113.46.143.235/downloads/zhiliantujie-1.0.0.dmg"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={highlight(isMac)}
+          >🖥️ macOS (.dmg)</a>
+          {" | "}
+          <a
+            href="http://113.46.143.235/downloads/zhiliantujie-1.0.0.exe"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ marginLeft: 6, ...highlight(isWin) }}
+          >🪟 Windows (.exe)</a>
+          {" | "}
+          <a
+            href="http://113.46.143.235/downloads/zhiliantujie-1.0.0.deb"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ marginLeft: 6, ...highlight(isLinux) }}
+          >🐧 Linux (.deb)</a>
+          {" | "}
+          <a
+            href="http://113.46.143.235/downloads/zhiliantujie-1.0.0.AppImage"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ marginLeft: 6, ...highlight(isLinux) }}
+          >📦 Linux (.AppImage)</a>
+       </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 };
-
 export default LoginPage;
